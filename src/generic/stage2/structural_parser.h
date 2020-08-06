@@ -13,8 +13,6 @@ namespace stage2 {
 #define SIMDJSON_TRY(EXPR) { auto _err = (EXPR); if (_err) { return _err; } }
 
 struct structural_parser : structural_iterator {
-  /** Current depth (nested objects and arrays) */
-  uint32_t depth{0};
 
   template<bool STREAMING, typename T>
   WARN_UNUSED really_inline error_code walk_document(T &visitor) noexcept;

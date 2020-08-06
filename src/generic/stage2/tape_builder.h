@@ -11,6 +11,8 @@ struct tape_builder {
   tape_writer tape;
   /** Next write location in the string buf for stage 2 parsing */
   uint8_t *current_string_buf_loc;
+  /** Current depth (nested objects and arrays) */
+  uint32_t depth{0};
 
   template<bool STREAMING>
   WARN_UNUSED static really_inline error_code parse_document(
@@ -69,22 +71,22 @@ private:
   really_inline void start_document(structural_parser &iter) {
     iter.log_start_value("document");
     start_container(iter);
-    iter.dom_parser.is_array[iter.depth] = false;
+    iter.dom_parser.is_array[depth] = false;
   }
   WARN_UNUSED really_inline error_code start_object(structural_parser &iter) {
     iter.log_start_value("object");
-    iter.depth++;
-    if (iter.depth >= iter.dom_parser.max_depth()) { iter.log_error("Exceeded max depth!"); return DEPTH_ERROR; }
+    depth++;
+    if (depth >= iter.dom_parser.max_depth()) { iter.log_error("Exceeded max depth!"); return DEPTH_ERROR; }
     start_container(iter);
-    iter.dom_parser.is_array[iter.depth] = false;
+    iter.dom_parser.is_array[depth] = false;
     return SUCCESS;
   }
   WARN_UNUSED really_inline error_code start_array(structural_parser &iter) {
     iter.log_start_value("array");
-    iter.depth++;
-    if (iter.depth >= iter.dom_parser.max_depth()) { iter.log_error("Exceeded max depth!"); return DEPTH_ERROR; }
+    depth++;
+    if (depth >= iter.dom_parser.max_depth()) { iter.log_error("Exceeded max depth!"); return DEPTH_ERROR; }
     start_container(iter);
-    iter.dom_parser.is_array[iter.depth] = true;
+    iter.dom_parser.is_array[depth] = true;
     return SUCCESS;
   }
 
@@ -102,7 +104,7 @@ private:
     tape.append(start_tape_index, internal::tape_type::ROOT);
     tape_writer::write(iter.dom_parser.doc->tape[start_tape_index], next_tape_index(iter), internal::tape_type::ROOT);
     iter.dom_parser.next_structural_index = uint32_t(iter.next_structural - &iter.dom_parser.structural_indexes[0]);
-    if (iter.depth != 0) {
+    if (depth != 0) {
       iter.log_error("Unclosed objects or arrays!");
       return TAPE_ERROR;
     }
@@ -114,8 +116,8 @@ private:
   // The object returned from end_container() should support the in_container(),
   // in_array() and in_object() methods, allowing the iterator to branch to the
   // correct place.
-  really_inline tape_builder &end_container(structural_parser &iter) {
-    iter.depth--;
+  really_inline tape_builder &end_container(structural_parser &) {
+    depth--;
     return *this;
   }
 
@@ -209,16 +211,16 @@ private:
 
   // increment_count increments the count of keys in an object or values in an array.
   really_inline void increment_count(structural_parser &iter) {
-    iter.dom_parser.open_containers[iter.depth].count++; // we have a key value pair in the object at parser.dom_parser.depth - 1
+    iter.dom_parser.open_containers[depth].count++; // we have a key value pair in the object at parser.dom_parser.depth - 1
   }
-  really_inline bool in_container(structural_parser &iter) {
-    return iter.depth != 0;
+  really_inline bool in_container(structural_parser &) {
+    return depth != 0;
   }
   really_inline bool in_array(structural_parser &iter) {
-    return iter.dom_parser.is_array[iter.depth];
+    return iter.dom_parser.is_array[depth];
   }
   really_inline bool in_object(structural_parser &iter) {
-    return !iter.dom_parser.is_array[iter.depth];
+    return !iter.dom_parser.is_array[depth];
   }
 
 // private:
@@ -234,19 +236,19 @@ private:
   }
 
   really_inline void start_container(structural_parser &iter) {
-    iter.dom_parser.open_containers[iter.depth].tape_index = next_tape_index(iter);
-    iter.dom_parser.open_containers[iter.depth].count = 0;
+    iter.dom_parser.open_containers[depth].tape_index = next_tape_index(iter);
+    iter.dom_parser.open_containers[depth].count = 0;
     tape.skip(); // We don't actually *write* the start element until the end.
   }
 
   really_inline void end_container(structural_parser &iter, internal::tape_type start, internal::tape_type end) noexcept {
     // Write the ending tape element, pointing at the start location
-    const uint32_t start_tape_index = iter.dom_parser.open_containers[iter.depth].tape_index;
+    const uint32_t start_tape_index = iter.dom_parser.open_containers[depth].tape_index;
     tape.append(start_tape_index, end);
     // Write the start tape element, pointing at the end location (and including count)
     // count can overflow if it exceeds 24 bits... so we saturate
     // the convention being that a cnt of 0xffffff or more is undetermined in value (>=  0xffffff).
-    const uint32_t count = iter.dom_parser.open_containers[iter.depth].count;
+    const uint32_t count = iter.dom_parser.open_containers[depth].count;
     const uint32_t cntsat = count > 0xFFFFFF ? 0xFFFFFF : count;
     tape_writer::write(iter.dom_parser.doc->tape[start_tape_index], next_tape_index(iter) | (uint64_t(cntsat) << 32), start);
   }
