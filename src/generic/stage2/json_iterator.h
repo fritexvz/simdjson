@@ -99,7 +99,6 @@ WARN_UNUSED really_inline error_code json_iterator::walk_document(T &visitor) no
 //
 object_first_field:
   SIMDJSON_TRY( visitor.start_object(*this) );
-  visitor.increment_count(*this);
   goto object_field;
 
 object_field:
@@ -121,7 +120,7 @@ object_field:
 object_continue:
   switch (advance_char()) {
     case ',': {
-      visitor.increment_count(*this);
+      visitor.next_field(*this);
       value = advance();
       if (unlikely( *value != '"' )) { log_error("Key string missing at beginning of field in object"); return TAPE_ERROR; }
       goto object_field;
@@ -143,7 +142,6 @@ scope_end:
 //
 array_first_value:
   SIMDJSON_TRY( visitor.start_array(*this) );
-  visitor.increment_count(*this);
   goto array_value;
 
 array_value:
@@ -162,7 +160,7 @@ array_value:
 
 array_continue:
   switch (advance_char()) {
-    case ',': visitor.increment_count(*this); value = advance(); goto array_value;
+    case ',': visitor.next_array_element(*this); value = advance(); goto array_value;
     case ']': visitor.end_array(*this); goto scope_end;
     default: log_error("Missing comma between array values"); return TAPE_ERROR;
   }

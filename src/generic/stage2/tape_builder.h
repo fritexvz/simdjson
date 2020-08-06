@@ -112,9 +112,11 @@ struct tape_builder {
     depth--;
     return *this;
   }
-  // increment_count increments the count of keys in an object or values in an array.
-  really_inline void increment_count(json_iterator &iter) {
-    iter.dom_parser.open_containers[depth].count++; // we have a key value pair in the object at parser.dom_parser.depth - 1
+  really_inline void next_array_element(json_iterator &iter) {
+    increment_count(iter);
+  }
+  really_inline void next_field(json_iterator &iter) {
+    increment_count(iter);
   }
   really_inline bool in_container(json_iterator &) {
     return depth != 0;
@@ -135,6 +137,11 @@ private:
   uint32_t depth{0};
 
   really_inline tape_builder(dom::document &doc) noexcept : tape{doc.tape.get()}, current_string_buf_loc{doc.string_buf.get()} {}
+
+  // increment_count increments the count of keys in an object or values in an array.
+  really_inline void increment_count(json_iterator &iter) {
+    iter.dom_parser.open_containers[depth].count++; // we have a key value pair in the object at parser.dom_parser.depth - 1
+  }
 
   WARN_UNUSED really_inline error_code parse_string(json_iterator &iter, const uint8_t *value, bool key = false) {
     iter.log_value(key ? "key" : "string");
@@ -235,7 +242,7 @@ private:
 
   really_inline void start_container(json_iterator &iter) {
     iter.dom_parser.open_containers[depth].tape_index = next_tape_index(iter);
-    iter.dom_parser.open_containers[depth].count = 0;
+    iter.dom_parser.open_containers[depth].count = 1;
     tape.skip(); // We don't actually *write* the start element until the end.
   }
 
