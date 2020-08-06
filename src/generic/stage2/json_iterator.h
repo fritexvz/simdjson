@@ -64,7 +64,7 @@ WARN_UNUSED really_inline error_code json_iterator::walk_document(T &visitor) no
   // Start the document
   //
   if (at_end()) { return EMPTY; }
-  visitor.start_document(*this);
+  SIMDJSON_TRY( visitor.start_document(*this) );
 
   //
   // Read first value
@@ -73,7 +73,7 @@ WARN_UNUSED really_inline error_code json_iterator::walk_document(T &visitor) no
     case '{':
       switch (advance_char()) {
         case '"': goto object_first_field;
-        case '}': visitor.empty_object(*this); goto document_end;
+        case '}': SIMDJSON_TRY( visitor.empty_object(*this) ); goto document_end;
         default: log_error("No key in first object field"); return TAPE_ERROR;
       }
     case '[': {
@@ -85,7 +85,7 @@ WARN_UNUSED really_inline error_code json_iterator::walk_document(T &visitor) no
         }
       }
       switch (advance_char()) {
-        case ']': visitor.empty_array(*this); goto document_end;
+        case ']': SIMDJSON_TRY( visitor.empty_array(*this) ); goto document_end;
         default: goto array_first_value;
       }
     }
@@ -106,12 +106,12 @@ object_field:
     case '{':
       switch (advance_char()) {
         case '"': goto object_first_field;
-        case '}': visitor.empty_object(*this); goto object_continue;
+        case '}': SIMDJSON_TRY( visitor.empty_object(*this) ); goto object_continue;
         default: log_error("No key in first object field"); return TAPE_ERROR;
       }
     case '[':
       switch (advance_char()) {
-        case ']': visitor.empty_array(*this); goto object_continue;
+        case ']': SIMDJSON_TRY( visitor.empty_array(*this) ); goto object_continue;
         default: goto array_first_value;
       }
     default: SIMDJSON_TRY( visitor.primitive(*this, value) ); goto object_continue;
@@ -120,10 +120,10 @@ object_field:
 object_continue:
   switch (advance_char()) {
     case ',':
-      visitor.next_field(*this);
+      SIMDJSON_TRY( visitor.next_field(*this) );
       if (unlikely( advance_char() != '"' )) { log_error("Key string missing at beginning of field in object"); return TAPE_ERROR; }
       goto object_field;
-    case '}': visitor.end_object(*this); goto scope_end;
+    case '}': SIMDJSON_TRY( visitor.end_object(*this) ); goto scope_end;
     default: log_error("No comma between object fields"); return TAPE_ERROR;
   }
 
@@ -147,12 +147,12 @@ array_value:
     case '{':
       switch (advance_char()) {
         case '"': goto object_first_field;
-        case '}': visitor.empty_object(*this); goto array_continue;
+        case '}': SIMDJSON_TRY( visitor.empty_object(*this) ); goto array_continue;
         default: log_error("No key in first object field"); return TAPE_ERROR;
       }
     case '[':
       switch (advance_char()) {
-        case ']': visitor.empty_array(*this); goto array_continue;
+        case ']': SIMDJSON_TRY( visitor.empty_array(*this) ); goto array_continue;
         default: goto array_first_value;
       }
     default: SIMDJSON_TRY( visitor.primitive(*this, value) ); goto array_continue;
@@ -160,8 +160,8 @@ array_value:
 
 array_continue:
   switch (advance_char()) {
-    case ',': visitor.next_array_element(*this); advance_char(); goto array_value;
-    case ']': visitor.end_array(*this); goto scope_end;
+    case ',': SIMDJSON_TRY( visitor.next_array_element(*this) ); advance_char(); goto array_value;
+    case ']': SIMDJSON_TRY( visitor.end_array(*this) ); goto scope_end;
     default: log_error("Missing comma between array values"); return TAPE_ERROR;
   }
 

@@ -17,7 +17,7 @@ struct tape_builder {
     return iter.walk_document<STREAMING>(builder);
   }
 
-  really_inline error_code root_primitive(json_iterator &iter, const uint8_t *value) {
+  WARN_UNUSED really_inline error_code root_primitive(json_iterator &iter, const uint8_t *value) {
     switch (*value) {
       case '"': return parse_string(iter, value);
       case 't': return parse_root_true_atom(iter, value);
@@ -32,7 +32,7 @@ struct tape_builder {
         return TAPE_ERROR;
     }
   }
-  really_inline error_code primitive(json_iterator &iter, const uint8_t *value) {
+  WARN_UNUSED really_inline error_code primitive(json_iterator &iter, const uint8_t *value) {
     switch (*value) {
       case '"': return parse_string(iter, value);
       case 't': return parse_true_atom(iter, value);
@@ -47,19 +47,20 @@ struct tape_builder {
         return TAPE_ERROR;
     }
   }
-  really_inline void empty_object(json_iterator &iter) {
+  WARN_UNUSED really_inline error_code empty_object(json_iterator &iter) {
     iter.log_value("empty object");
-    empty_container(iter, internal::tape_type::START_OBJECT, internal::tape_type::END_OBJECT);
+    return empty_container(iter, internal::tape_type::START_OBJECT, internal::tape_type::END_OBJECT);
   }
-  really_inline void empty_array(json_iterator &iter) {
+  WARN_UNUSED really_inline error_code empty_array(json_iterator &iter) {
     iter.log_value("empty array");
-    empty_container(iter, internal::tape_type::START_ARRAY, internal::tape_type::END_ARRAY);
+    return empty_container(iter, internal::tape_type::START_ARRAY, internal::tape_type::END_ARRAY);
   }
 
-  really_inline void start_document(json_iterator &iter) {
+  WARN_UNUSED really_inline error_code start_document(json_iterator &iter) {
     iter.log_start_value("document");
     start_container(iter);
     iter.dom_parser.is_array[depth] = false;
+    return SUCCESS;
   }
   WARN_UNUSED really_inline error_code start_object(json_iterator &iter) {
     iter.log_start_value("object");
@@ -78,13 +79,13 @@ struct tape_builder {
     return SUCCESS;
   }
 
-  really_inline void end_object(json_iterator &iter) {
+  WARN_UNUSED really_inline error_code end_object(json_iterator &iter) {
     iter.log_end_value("object");
-    end_container(iter, internal::tape_type::START_OBJECT, internal::tape_type::END_OBJECT);
+    return end_container(iter, internal::tape_type::START_OBJECT, internal::tape_type::END_OBJECT);
   }
-  really_inline void end_array(json_iterator &iter) {
+  WARN_UNUSED really_inline error_code end_array(json_iterator &iter) {
     iter.log_end_value("array");
-    end_container(iter, internal::tape_type::START_ARRAY, internal::tape_type::END_ARRAY);
+    return end_container(iter, internal::tape_type::START_ARRAY, internal::tape_type::END_ARRAY);
   }
   WARN_UNUSED really_inline error_code end_document(json_iterator &iter) {
     iter.log_end_value("document");
@@ -102,6 +103,13 @@ struct tape_builder {
     return parse_string(iter, value, true);
   }
 
+  WARN_UNUSED really_inline error_code next_array_element(json_iterator &iter) {
+    return increment_count(iter);
+  }
+  WARN_UNUSED really_inline error_code next_field(json_iterator &iter) {
+    return increment_count(iter);
+  }
+
   // Called after end_object/end_array. Not called after empty_object/empty_array,
   // as the parent is already known in those cases.
   //
@@ -111,12 +119,6 @@ struct tape_builder {
   really_inline tape_builder &end_container(json_iterator &) {
     depth--;
     return *this;
-  }
-  really_inline void next_array_element(json_iterator &iter) {
-    increment_count(iter);
-  }
-  really_inline void next_field(json_iterator &iter) {
-    increment_count(iter);
   }
   really_inline bool in_container(json_iterator &) {
     return depth != 0;
@@ -139,8 +141,9 @@ private:
   really_inline tape_builder(dom::document &doc) noexcept : tape{doc.tape.get()}, current_string_buf_loc{doc.string_buf.get()} {}
 
   // increment_count increments the count of keys in an object or values in an array.
-  really_inline void increment_count(json_iterator &iter) {
+  WARN_UNUSED really_inline error_code increment_count(json_iterator &iter) {
     iter.dom_parser.open_containers[depth].count++; // we have a key value pair in the object at parser.dom_parser.depth - 1
+    return SUCCESS;
   }
 
   WARN_UNUSED really_inline error_code parse_string(json_iterator &iter, const uint8_t *value, bool key = false) {
@@ -161,7 +164,7 @@ private:
     return SUCCESS;
   }
 
-  really_inline error_code parse_root_number(json_iterator &iter, const uint8_t *value) {
+  WARN_UNUSED really_inline error_code parse_root_number(json_iterator &iter, const uint8_t *value) {
     //
     // We need to make a copy to make sure that the string is space terminated.
     // This is not about padding the input, which should already padded up
@@ -234,10 +237,11 @@ private:
     return uint32_t(tape.next_tape_loc - iter.dom_parser.doc->tape.get());
   }
 
-  really_inline void empty_container(json_iterator &iter, internal::tape_type start, internal::tape_type end) {
+  WARN_UNUSED really_inline error_code empty_container(json_iterator &iter, internal::tape_type start, internal::tape_type end) {
     auto start_index = next_tape_index(iter);
     tape.append(start_index+2, start);
     tape.append(start_index, end);
+    return SUCCESS;
   }
 
   really_inline void start_container(json_iterator &iter) {
@@ -246,7 +250,7 @@ private:
     tape.skip(); // We don't actually *write* the start element until the end.
   }
 
-  really_inline void end_container(json_iterator &iter, internal::tape_type start, internal::tape_type end) noexcept {
+  WARN_UNUSED really_inline error_code end_container(json_iterator &iter, internal::tape_type start, internal::tape_type end) noexcept {
     // Write the ending tape element, pointing at the start location
     const uint32_t start_tape_index = iter.dom_parser.open_containers[depth].tape_index;
     tape.append(start_tape_index, end);
@@ -256,6 +260,7 @@ private:
     const uint32_t count = iter.dom_parser.open_containers[depth].count;
     const uint32_t cntsat = count > 0xFFFFFF ? 0xFFFFFF : count;
     tape_writer::write(iter.dom_parser.doc->tape[start_tape_index], next_tape_index(iter) | (uint64_t(cntsat) << 32), start);
+    return SUCCESS;
   }
 
   really_inline uint8_t *on_start_string(json_iterator &iter) noexcept {
