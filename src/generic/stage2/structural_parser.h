@@ -178,14 +178,7 @@ array_continue: {
 } // array_continue:
 
 document_end: {
-  visitor.end_document(*this);
-
-  dom_parser.next_structural_index = uint32_t(next_structural - &dom_parser.structural_indexes[0]);
-
-  if (depth != 0) {
-    log_error("Unclosed objects or arrays!");
-    return TAPE_ERROR;
-  }
+  SIMDJSON_TRY( visitor.end_document(*this) );
 
   // If we didn't make it to the end, it's an error
   if ( !STREAMING && dom_parser.next_structural_index != dom_parser.n_structural_indexes ) {

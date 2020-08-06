@@ -96,11 +96,17 @@ private:
     iter.log_end_value("array");
     end_container(iter, internal::tape_type::START_ARRAY, internal::tape_type::END_ARRAY);
   }
-  really_inline void end_document(structural_parser &iter) {
+  WARN_UNUSED really_inline error_code end_document(structural_parser &iter) {
     iter.log_end_value("document");
     constexpr uint32_t start_tape_index = 0;
     tape.append(start_tape_index, internal::tape_type::ROOT);
     tape_writer::write(iter.dom_parser.doc->tape[start_tape_index], next_tape_index(iter), internal::tape_type::ROOT);
+    iter.dom_parser.next_structural_index = uint32_t(iter.next_structural - &iter.dom_parser.structural_indexes[0]);
+    if (iter.depth != 0) {
+      iter.log_error("Unclosed objects or arrays!");
+      return TAPE_ERROR;
+    }
+    return SUCCESS;
   }
   // Called after end_object/end_array. Not called after empty_object/empty_array,
   // as the parent is already known in those cases.
