@@ -9,6 +9,7 @@ public:
   const uint8_t* const buf;
   uint32_t *next_structural;
   dom_parser_implementation &dom_parser;
+  const uint8_t *value{}; // The current JSON value we advanced to
 
   template<bool STREAMING, typename T>
   WARN_UNUSED really_inline error_code walk_document(T &visitor) noexcept;
@@ -21,11 +22,9 @@ public:
   }
 
   // Get the buffer position of the current structural character
-  really_inline const uint8_t* advance() {
-    return &buf[*(next_structural++)];
-  }
-  really_inline char advance_char() {
-    return buf[*(next_structural++)];
+  really_inline uint8_t advance_char() {
+    value = &buf[*(next_structural++)];
+    return *value;
   }
   really_inline size_t remaining_len() {
     return dom_parser.len - *(next_structural-1);
@@ -61,8 +60,6 @@ template<bool STREAMING, typename T>
 WARN_UNUSED really_inline error_code json_iterator::walk_document(T &visitor) noexcept {
   logger::log_start();
 
-  const uint8_t *value; // Used to keep a value around between states
-
   //
   // Start the document
   //
@@ -72,8 +69,9 @@ WARN_UNUSED really_inline error_code json_iterator::walk_document(T &visitor) no
   //
   // Read first value
   //
-  switch (*(value = advance())) {
-    case '{': switch (*(value = advance())) {
+  switch (advance_char()) {
+    case '{':
+      switch (advance_char()) {
         case '"': goto object_first_field;
         case '}': visitor.empty_object(*this); goto document_end;
         default: log_error("No key in first object field"); return TAPE_ERROR;
@@ -86,7 +84,7 @@ WARN_UNUSED really_inline error_code json_iterator::walk_document(T &visitor) no
           return TAPE_ERROR;
         }
       }
-      switch (*(value = advance())) {
+      switch (advance_char()) {
         case ']': visitor.empty_array(*this); goto document_end;
         default: goto array_first_value;
       }
@@ -104,13 +102,15 @@ object_first_field:
 object_field:
   SIMDJSON_TRY( visitor.key(*this, value) );
   if (unlikely( advance_char() != ':' )) { log_error("Missing colon after key in object"); return TAPE_ERROR; }
-  switch (*(value = advance())) {
-    case '{': switch (*(value = advance())) {
+  switch (advance_char()) {
+    case '{':
+      switch (advance_char()) {
         case '"': goto object_first_field;
         case '}': visitor.empty_object(*this); goto object_continue;
         default: log_error("No key in first object field"); return TAPE_ERROR;
       }
-    case '[': switch (*(value = advance())) {
+    case '[':
+      switch (advance_char()) {
         case ']': visitor.empty_array(*this); goto object_continue;
         default: goto array_first_value;
       }
@@ -119,12 +119,10 @@ object_field:
 
 object_continue:
   switch (advance_char()) {
-    case ',': {
+    case ',':
       visitor.next_field(*this);
-      value = advance();
-      if (unlikely( *value != '"' )) { log_error("Key string missing at beginning of field in object"); return TAPE_ERROR; }
+      if (unlikely( advance_char() != '"' )) { log_error("Key string missing at beginning of field in object"); return TAPE_ERROR; }
       goto object_field;
-    }
     case '}': visitor.end_object(*this); goto scope_end;
     default: log_error("No comma between object fields"); return TAPE_ERROR;
   }
@@ -146,21 +144,23 @@ array_first_value:
 
 array_value:
   switch (*value) {
-    case '{': switch (*(value = advance())) {
+    case '{':
+      switch (advance_char()) {
         case '"': goto object_first_field;
         case '}': visitor.empty_object(*this); goto array_continue;
         default: log_error("No key in first object field"); return TAPE_ERROR;
       }
-    case '[': switch (*(value = advance())) {
+    case '[':
+      switch (advance_char()) {
         case ']': visitor.empty_array(*this); goto array_continue;
         default: goto array_first_value;
       }
-    default: SIMDJSON_TRY( visitor.primitive(*this, value) );
+    default: SIMDJSON_TRY( visitor.primitive(*this, value) ); goto array_continue;
   }
 
 array_continue:
   switch (advance_char()) {
-    case ',': visitor.next_array_element(*this); value = advance(); goto array_value;
+    case ',': visitor.next_array_element(*this); advance_char(); goto array_value;
     case ']': visitor.end_array(*this); goto scope_end;
     default: log_error("Missing comma between array values"); return TAPE_ERROR;
   }
