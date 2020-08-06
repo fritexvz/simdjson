@@ -75,7 +75,7 @@ WARN_UNUSED really_inline error_code structural_parser::walk_document(T &visitor
         default: goto array_first_value;
       }
     }
-    default: SIMDJSON_TRY( visitor.parse_root_primitive(*this, value) ); goto document_end;
+    default: SIMDJSON_TRY( visitor.root_primitive(*this, value) ); goto document_end;
   }
 
 //
@@ -87,7 +87,7 @@ object_first_field:
   goto object_field;
 
 object_field:
-  SIMDJSON_TRY( visitor.parse_key(*this, value) );
+  SIMDJSON_TRY( visitor.key(*this, value) );
   if (unlikely( advance_char() != ':' )) { log_error("Missing colon after key in object"); return TAPE_ERROR; }
   switch (*(value = advance())) {
     case '{': switch (*(value = advance())) {
@@ -99,7 +99,7 @@ object_field:
         case ']': visitor.empty_array(*this); goto object_continue;
         default: goto array_first_value;
       }
-    default: SIMDJSON_TRY( visitor.parse_primitive(*this, value) ); goto object_continue;
+    default: SIMDJSON_TRY( visitor.primitive(*this, value) ); goto object_continue;
   }
 
 object_continue:
@@ -141,7 +141,7 @@ array_value:
         case ']': visitor.empty_array(*this); goto array_continue;
         default: goto array_first_value;
       }
-    default: SIMDJSON_TRY( visitor.parse_primitive(*this, value) );
+    default: SIMDJSON_TRY( visitor.primitive(*this, value) );
   }
 
 array_continue:
