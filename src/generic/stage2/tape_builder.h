@@ -102,6 +102,16 @@ private:
     tape.append(start_tape_index, internal::tape_type::ROOT);
     tape_writer::write(iter.dom_parser.doc->tape[start_tape_index], next_tape_index(iter), internal::tape_type::ROOT);
   }
+  // Called after end_object/end_array. Not called after empty_object/empty_array,
+  // as the parent is already known in those cases.
+  //
+  // The object returned from end_container() should support the in_container(),
+  // in_array() and in_object() methods, allowing the iterator to branch to the
+  // correct place.
+  really_inline tape_builder &end_container(structural_parser &iter) {
+    iter.depth--;
+    return *this;
+  }
 
   WARN_UNUSED really_inline error_code parse_key(structural_parser &iter, const uint8_t *value) {
     return parse_string(iter, value, true);
@@ -194,6 +204,15 @@ private:
   // increment_count increments the count of keys in an object or values in an array.
   really_inline void increment_count(structural_parser &iter) {
     iter.dom_parser.open_containers[iter.depth].count++; // we have a key value pair in the object at parser.dom_parser.depth - 1
+  }
+  really_inline bool in_container(structural_parser &iter) {
+    return iter.depth != 0;
+  }
+  really_inline bool in_array(structural_parser &iter) {
+    return iter.dom_parser.is_array[iter.depth];
+  }
+  really_inline bool in_object(structural_parser &iter) {
+    return !iter.dom_parser.is_array[iter.depth];
   }
 
 // private:

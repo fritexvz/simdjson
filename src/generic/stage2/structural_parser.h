@@ -139,9 +139,9 @@ object_continue: {
 } // object_continue:
 
 scope_end: {
-  depth--;
-  if (depth == 0) { goto document_end; }
-  if (dom_parser.is_array[depth]) { goto array_continue; }
+  auto parent = visitor.end_container(*this);
+  if (!parent.in_container(*this)) { goto document_end; }
+  if (parent.in_array(*this)) { goto array_continue; }
   goto object_continue;
 } // scope_end:
 
