@@ -71,15 +71,21 @@ private:
     start_container(iter);
     iter.dom_parser.is_array[iter.depth] = false;
   }
-  really_inline void start_object(structural_parser &iter) {
+  WARN_UNUSED really_inline error_code start_object(structural_parser &iter) {
     iter.log_start_value("object");
+    iter.depth++;
+    if (iter.depth >= iter.dom_parser.max_depth()) { iter.log_error("Exceeded max depth!"); return DEPTH_ERROR; }
     start_container(iter);
     iter.dom_parser.is_array[iter.depth] = false;
+    return SUCCESS;
   }
-  really_inline void start_array(structural_parser &iter) {
+  WARN_UNUSED really_inline error_code start_array(structural_parser &iter) {
     iter.log_start_value("array");
+    iter.depth++;
+    if (iter.depth >= iter.dom_parser.max_depth()) { iter.log_error("Exceeded max depth!"); return DEPTH_ERROR; }
     start_container(iter);
     iter.dom_parser.is_array[iter.depth] = true;
+    return SUCCESS;
   }
 
   really_inline void end_object(structural_parser &iter) {
